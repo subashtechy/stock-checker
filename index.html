@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Karz &amp; Dolls — Stock Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --border:#262a35; --text:#e8eaed; --muted:#9aa0ab;
+    --green:#1f9d55; --green-bg:#0f3322; --red:#e5484d; --red-bg:#3a1618; --accent:#6d8dff;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{padding:20px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:5;}
+  h1{font-size:20px;margin:0 0 4px;}
+  header p{margin:0;color:var(--muted);font-size:13px;}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 24px 60px;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center;}
+  button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:9px 14px;font-size:13px;cursor:pointer;font-weight:600;}
+  button:hover{filter:brightness(1.1);}
+  .status-line{font-size:12px;color:var(--muted);margin-top:8px;white-space:pre-wrap;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+  .card .imgwrap{width:100%;aspect-ratio:1/1;background:#0d0f14;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .card img{width:100%;height:100%;object-fit:cover;}
+  .card .noimg{color:var(--muted);font-size:11px;text-align:center;padding:10px;}
+  .card .body{padding:10px 12px 12px;flex:1;display:flex;flex-direction:column;gap:4px;}
+  .card .brand{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .card .name{font-size:13px;font-weight:600;line-height:1.3;min-height:34px;}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:4px 8px;border-radius:20px;margin-top:auto;width:fit-content;}
+  .badge.in{background:var(--green-bg);color:var(--green);}
+  .badge.out{background:var(--red-bg);color:var(--red);}
+  .new-ribbon{position:absolute;top:8px;left:-6px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;transform:rotate(-8deg);border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  .section-title{font-size:16px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .count-pill{font-size:11px;background:#2a2e38;color:var(--muted);padding:2px 8px;border-radius:20px;}
+  .error-pill{font-size:11px;background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:20px;}
+  .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:10px;}
+  a{color:var(--accent);}
+  .tabbar{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 4px;position:sticky;top:70px;background:var(--bg);padding:8px 0;z-index:4;}
+  .tab{background:var(--card);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+  .tab .n{font-size:11px;color:var(--muted);background:#0d0f14;padding:1px 7px;border-radius:10px;}
+  .tab.active{background:var(--accent);border-color:var(--accent);}
+  .tab.active .n{background:rgba(255,255,255,.25);color:#fff;}
+  .tab .out-n{font-size:11px;color:var(--red);}
+  .sort-select{background:#0d0f14;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;margin-left:auto;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Stock Dashboard — Karz &amp; Dolls</h1>
+  <p>Data is scraped automatically on a schedule by a GitHub Action and stored in <code>data.json</code>. This page just reads and displays it.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <div class="row">
+      <button id="refreshBtn">Reload data.json</button>
+      <span class="status-line" id="statusLine">Loading…</span>
+      <span class="status-line" id="countdownLine"></span>
+    </div>
+  </div>
+
+  <div id="tabBar" class="tabbar"></div>
+  <div id="dashboard"></div>
+
+</div>
+
+<script>
+const SORT_OPTIONS = [
+  {key:'name-asc',     label:'Name: A → Z'},
+  {key:'name-desc',    label:'Name: Z → A'},
+  {key:'created-desc', label:'Created: Newest first'},
+  {key:'created-asc',  label:'Created: Oldest first'},
+  {key:'updated-desc', label:'Updated: Latest first'},
+  {key:'updated-asc',  label:'Updated: Oldest first'}
+];
+
+let activeTab = 'ALL';
+let sortState = {};
+let storeCache = { products: {}, meta: {} };
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function sortItems(items, key){
+  const arr = items.slice();
+  switch(key){
+    case 'name-desc':    arr.sort((a,b) => b.name.localeCompare(a.name)); break;
+    case 'created-desc': arr.sort((a,b) => (b.firstSeen||0) - (a.firstSeen||0)); break;
+    case 'created-asc':  arr.sort((a,b) => (a.firstSeen||0) - (b.firstSeen||0)); break;
+    case 'updated-desc': arr.sort((a,b) => (b.lastUpdated||0) - (a.lastUpdated||0)); break;
+    case 'updated-asc':  arr.sort((a,b) => (a.lastUpdated||0) - (b.lastUpdated||0)); break;
+    case 'name-asc':
+    default:              arr.sort((a,b) => a.name.localeCompare(b.name));
+  }
+  return arr;
+}
+
+function cardHtml(p){
+  const isNew = (Date.now() - p.firstSeen) < 24*60*60*1000;
+  const inStock = p.stock > 0;
+  const imgInner = p.image
+    ? `<img src="${p.image}" alt="${escapeHtml(p.name)}" onerror="this.parentElement.innerHTML='<div class=noimg>Image not found</div>';">`
+    : `<div class="noimg">No image data</div>`;
+  return `
+    <div class="card">
+      ${isNew ? '<div class="new-ribbon">NEW</div>' : ''}
+      <div class="imgwrap">${imgInner}</div>
+      <div class="body">
+        <div class="brand">${escapeHtml(p.brand || '')}</div>
+        <div class="name">${escapeHtml(p.name)}</div>
+        <span class="badge ${inStock ? 'in' : 'out'}">${inStock ? ('In Stock: ' + p.stock) : 'Out of Stock'}</span>
+      </div>
+    </div>
+  `;
+}
+
+function setStatus(msg){
+  document.getElementById('statusLine').textContent = msg;
+}
+
+async function loadData(){
+  setStatus('Loading data.json…');
+  try{
+    const res = await fetch('data.json?t=' + Date.now()); // cache-bust so GitHub Pages CDN caching doesn't hide new scrapes
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    storeCache = await res.json();
+    const total = Object.keys(storeCache.products || {}).length;
+    setStatus(`Loaded ${total} products. Last file fetch: ${new Date().toLocaleString()}`);
+  } catch(e){
+    setStatus('Could not load data.json: ' + e.message);
+    storeCache = { products: {}, meta: {} };
+  }
+  renderDashboard();
+}
+
+function renderDashboard(){
+  const store = storeCache.products || {};
+  const meta = storeCache.meta || {};
+  const dash = document.getElementById('dashboard');
+  const tabBar = document.getElementById('tabBar');
+  const byCategory = {};
+  Object.values(store).forEach(p => {
+    if(!byCategory[p.category]) byCategory[p.category] = [];
+    byCategory[p.category].push(p);
+  });
+
+  const categories = Object.keys(byCategory).sort();
+  if(categories.length === 0){
+    tabBar.innerHTML = '';
+    dash.innerHTML = '<div class="empty">No data yet. Wait for the GitHub Action to run once (or trigger it manually from the Actions tab), then reload.</div>';
+    return;
+  }
+
+  if(activeTab !== 'ALL' && !categories.includes(activeTab)) activeTab = 'ALL';
+
+  const totalCount = Object.values(store).length;
+  const totalOut = Object.values(store).filter(p => p.stock <= 0).length;
+
+  const tabs = [{key:'ALL', label:'All categories', n: totalCount, out: totalOut}]
+    .concat(categories.map(cat => ({
+      key: cat, label: cat,
+      n: byCategory[cat].length,
+      out: byCategory[cat].filter(p => p.stock <= 0).length
+    })));
+
+  tabBar.innerHTML = tabs.map(t => `
+    <div class="tab ${t.key === activeTab ? 'active' : ''}" data-tab="${escapeHtml(t.key)}">
+      ${escapeHtml(t.label)} <span class="n">${t.n}</span>${t.out ? `<span class="out-n">${t.out} out</span>` : ''}
+    </div>
+  `).join('');
+
+  tabBar.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', () => {
+      activeTab = el.getAttribute('data-tab');
+      renderDashboard();
+    });
+  });
+
+  const catsToShow = activeTab === 'ALL' ? categories : [activeTab];
+
+  dash.innerHTML = catsToShow.map(cat => {
+    const sortKey = sortState[cat] || 'name-asc';
+    const items = sortItems(byCategory[cat], sortKey);
+    const outCount = items.filter(p => p.stock <= 0).length;
+    const m = meta[cat];
+    const lastChecked = m && m.lastChecked ? new Date(m.lastChecked).toLocaleString() : 'unknown';
+    const errorPill = m && m.lastError ? `<span class="error-pill">last scrape error: ${escapeHtml(m.lastError)}</span>` : '';
+    const sortOptionsHtml = SORT_OPTIONS.map(o =>
+      `<option value="${o.key}" ${o.key === sortKey ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+    return `
+      <div class="section-title">${escapeHtml(cat)}
+        <span class="count-pill">${items.length} items</span>
+        <span class="count-pill">${outCount} out of stock</span>
+        <span class="count-pill">checked: ${lastChecked}</span>
+        ${errorPill}
+        <select class="sort-select" data-cat="${escapeHtml(cat)}">${sortOptionsHtml}</select>
+      </div>
+      <div class="grid">${items.map(cardHtml).join('')}</div>
+    `;
+  }).join('');
+
+  dash.querySelectorAll('.sort-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const cat = sel.getAttribute('data-cat');
+      sortState[cat] = sel.value;
+      renderDashboard();
+    });
+  });
+}
+
+// --- Auto-refresh every 5 minutes ---
+const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+let nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
+let refreshTimer = null;
+let countdownTimer = null;
+
+function scheduleAutoRefresh() {
+  clearTimeout(refreshTimer);
+  clearInterval(countdownTimer);
+  nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
+  refreshTimer = setTimeout(() => {
+    loadData();
+    scheduleAutoRefresh();
+  }, AUTO_REFRESH_MS);
+  // Update countdown every second
+  countdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
+  const remaining = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
+  const min = Math.floor(remaining / 60);
+  const sec = remaining % 60;
+  const el = document.getElementById('countdownLine');
+  if (el) el.textContent = `Auto-refresh in ${min}:${String(sec).padStart(2, '0')}`;
+}
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  loadData();
+  scheduleAutoRefresh(); // Reset timer on manual refresh
+});
+
+loadData();
+scheduleAutoRefresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+name: Scrape stock data
+
+on:
+  schedule:
+    # Run every 30 minutes to catch new products quickly
+    - cron: '*/30 * * * *'
+
+  # Manual trigger — click "Run workflow" in Actions tab anytime
+  workflow_dispatch:
+
+  # Auto-trigger when you add/remove categories or change the scraper
+  push:
+    branches: [main]
+    paths:
+      - 'categories.json'
+      - 'scrape.js'
+
+# Only allow one scrape at a time (cancel older if new one starts)
+concurrency:
+  group: scrape
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run scraper
+        id: scrape
+        run: |
+          OUTPUT=$(node scrape.js 2>&1)
+          echo "$OUTPUT"
+          # Extract the summary line for the commit message
+          SUMMARY=$(echo "$OUTPUT" | grep '^Done\.' | head -1)
+          echo "summary=${SUMMARY:-Scrape completed}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          # --porcelain returns empty if nothing staged
+          if git diff --cached --quiet; then
+            echo "No changes to data.json — skipping commit."
+          else
+            git commit -m "📦 ${{ steps.scrape.outputs.summary }}"
+            git push
+          fi
