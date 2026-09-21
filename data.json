@@ -2908,33 +2908,33 @@
   "meta": {
     "mini-gt": {
       "url": "https://www.karzanddolls.com/mini-gt/mini-gt",
-      "lastChecked": 1790020613100,
+      "lastChecked": 1790032271294,
       "lastCount": 85,
-      "lastError": "No product records found in __NEXT_DATA__"
+      "lastError": "fetch failed"
     },
     "trends-hobby": {
       "url": "https://www.karzanddolls.com/trends-hobby/trends-hobby",
-      "lastChecked": 1790020613100,
+      "lastChecked": 1790032271294,
       "lastCount": 6,
-      "lastError": "No product records found in __NEXT_DATA__"
+      "lastError": "fetch failed"
     },
     "mini-gt-blister-pack": {
       "url": "https://www.karzanddolls.com/mini-gt/mini-gt-blister-pack",
-      "lastChecked": 1790020613100,
+      "lastChecked": 1790032271294,
       "lastCount": 113,
-      "lastError": "No product records found in __NEXT_DATA__"
+      "lastError": "fetch failed"
     },
     "kaido-house": {
       "url": "https://www.karzanddolls.com/mini-gt/kaido-house",
-      "lastChecked": 1790020613100,
+      "lastChecked": 1790032271294,
       "lastCount": 15,
-      "lastError": "No product records found in __NEXT_DATA__"
+      "lastError": "fetch failed"
     },
     "pop-race": {
       "url": "https://www.karzanddolls.com/pop-race/pop-race",
-      "lastChecked": 1790020613100,
+      "lastChecked": 1790032271294,
       "lastCount": 48,
-      "lastError": "No product records found in __NEXT_DATA__"
+      "lastError": "fetch failed"
     }
   }
 }
